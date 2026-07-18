@@ -78,6 +78,10 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.match(component, /近くの店舗を探す/);
   assert.match(component, /住所.*optional-mark.*任意/);
   assert.doesNotMatch(component, /disabled=\{!draft\.name\|\|!draft\.address\}/);
+  assert.match(component, /ついでにレビュー/);
+  assert.match(component, /お店とレビューを登録/);
   assert.match(placeRoute, /住所未登録/);
+  assert.match(placeRoute, /reviewCreated: hasReview/);
+  assert.match(placeRoute, /await DB\.batch\(statements\)/);
   assert.match(server, /PASSWORD_SALT_VERSION = "v2\$"/);
 });
