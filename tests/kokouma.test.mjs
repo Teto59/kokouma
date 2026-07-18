@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { parseGoogleMapsUrl } from "../lib/maps.ts";
+import { parseGoogleMapsUrl, parseNominatimReverse } from "../lib/maps.ts";
 import { canViewReview, isReviewVisibility } from "../lib/visibility.ts";
 import { brandAccent, normalizeBrandName, normalizeProductName, optionalHttpsUrl } from "../lib/products.ts";
 
@@ -20,6 +20,16 @@ test("parses query-based Google Maps links", () => {
 
 test("rejects non-Google hosts", () => {
   assert.throws(() => parseGoogleMapsUrl("https://example.com/maps/place/foo"), /Google Maps/);
+});
+
+test("turns reverse-geocoded Japanese addresses into an editable area", () => {
+  const result = parseNominatimReverse({
+    display_name: "浅草二丁目, 台東区, 東京都, 111-0032, 日本",
+    address: { state: "東京都", city: "台東区", suburb: "浅草", neighbourhood: "浅草二丁目", road: "雷門通り" },
+  });
+  assert.equal(result.area, "浅草");
+  assert.deepEqual(result.suggestions.slice(0, 2), ["浅草", "台東区"]);
+  assert.equal(result.address, "東京都台東区浅草二丁目雷門通り");
 });
 
 test("enforces following and mutual review audiences", () => {
@@ -80,6 +90,9 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.doesNotMatch(component, /disabled=\{!draft\.name\|\|!draft\.address\}/);
   assert.match(component, /ついでにレビュー/);
   assert.match(component, /お店とレビューを登録/);
+  assert.match(component, /ピンから取得/);
+  assert.match(component, /kokouma-area-suggestions/);
+  assert.doesNotMatch(component, /\["浅草","渋谷","新宿","二子玉川","神田","その他"\]/);
   assert.match(placeRoute, /住所未登録/);
   assert.match(placeRoute, /reviewCreated: hasReview/);
   assert.match(placeRoute, /await DB\.batch\(statements\)/);
