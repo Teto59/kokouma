@@ -73,3 +73,50 @@ export const geocodeCache = sqliteTable("geocode_cache", {
   payload: text("payload").notNull(),
   createdAt: integer("created_at").notNull(),
 });
+
+export const brands = sqliteTable("brands", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  slug: text("slug").notNull().unique(),
+  accentColor: text("accent_color").notNull().default("#ff5a36"),
+  mapsQuery: text("maps_query").notNull(),
+  isSeed: integer("is_seed", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const products = sqliteTable("products", {
+  id: text("id").primaryKey(),
+  brandId: text("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  isLimited: integer("is_limited", { mode: "boolean" }).notNull().default(true),
+  releaseDate: text("release_date"),
+  officialUrl: text("official_url"),
+  imageUrl: text("image_url"),
+  imageKey: text("image_key"),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  isSeed: integer("is_seed", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [uniqueIndex("products_brand_name_unique").on(table.brandId, table.normalizedName)]);
+
+export const productReviews = sqliteTable("product_reviews", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  body: text("body").notNull(),
+  tier: text("tier", { enum: ["S", "A", "B", "C"] }).notNull(),
+  visibility: text("visibility", { enum: ["public", "following", "mutual"] }).notNull().default("public"),
+  imageUrl: text("image_url"),
+  imageKey: text("image_key"),
+  storeName: text("store_name"),
+  storeMapsUrl: text("store_maps_url"),
+  isSeed: integer("is_seed", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [uniqueIndex("product_reviews_user_product_unique").on(table.userId, table.productId)]);
+
+export const productWants = sqliteTable("product_wants", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.userId, table.productId] })]);

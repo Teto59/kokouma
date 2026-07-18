@@ -29,6 +29,12 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS idx_reviews_place ON reviews(place_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_places_area ON places(area)`,
   `CREATE INDEX IF NOT EXISTS idx_tiers_user ON tier_entries(user_id, tier, position)`,
+  `CREATE TABLE IF NOT EXISTS brands (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, slug TEXT NOT NULL UNIQUE, accent_color TEXT NOT NULL DEFAULT '#ff5a36', maps_query TEXT NOT NULL, is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, brand_id TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE, name TEXT NOT NULL, normalized_name TEXT NOT NULL, is_limited INTEGER NOT NULL DEFAULT 1, release_date TEXT, official_url TEXT, image_url TEXT, image_key TEXT, created_by TEXT NOT NULL REFERENCES users(id), is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(brand_id, normalized_name))`,
+  `CREATE TABLE IF NOT EXISTS product_reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, tier TEXT NOT NULL CHECK(tier IN ('S','A','B','C')), visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual')), image_url TEXT, image_key TEXT, store_name TEXT, store_maps_url TEXT, is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, product_id))`,
+  `CREATE TABLE IF NOT EXISTS product_wants (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE, created_at INTEGER NOT NULL, PRIMARY KEY(user_id, product_id))`,
+  `CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_product_reviews_product ON product_reviews(product_id, created_at DESC)`,
 ];
 
 const seedUsers = [
@@ -87,6 +93,24 @@ const seedTiers = [
   ["u_kioxia_ota", "p_kanda_sankichi", "S", 0],
 ];
 
+const seedBrands = [
+  ["b_starbucks", "スターバックス", "starbucks", "#00754a", "スターバックス"],
+  ["b_kfc", "ケンタッキーフライドチキン", "kfc", "#e4002b", "ケンタッキーフライドチキン"],
+  ["b_godiva", "GODIVA", "godiva", "#b89b5e", "GODIVA"],
+];
+
+const seedProducts = [
+  ["prod_starbucks_honey_banana", "b_starbucks", "ハニー バナナ フラペチーノ®", "ハニーバナナフラペチーノ", 1, "2026-06-05", "https://stories.starbucks.co.jp/press/2026/pr2026-06-01/", "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=1200&q=85", "u_yui"],
+  ["prod_kfc_summer_wafu", "b_kfc", "夏の和風バーガーズ", "夏の和風バーガーズ", 1, "2026-07-08", "https://japan.kfc.co.jp/news_release/8158", "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85", "u_daichi"],
+  ["prod_godiva_melon", "b_godiva", "メロン ショコリキサー", "メロンショコリキサー", 1, "2026-07-17", "https://www.godiva.co.jp/news/news20260702_1.html", "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=1200&q=85", "u_mika"],
+];
+
+const seedProductReviews = [
+  ["pr1", "u_yui", "prod_starbucks_honey_banana", 5, "はちみつの丸い甘さとバナナの濃さが、疲れた午後にちょうどいい。今季のご褒美枠。", "S", "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=1200&q=85"],
+  ["pr2", "u_daichi", "prod_kfc_summer_wafu", 4, "だしの旨みにレモンが効いて、揚げ物なのに最後まで軽い。夏の昼にもう一度食べたい。", "A", "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85"],
+  ["pr3", "u_mika", "prod_godiva_melon", 5, "メロンの青い香りのあとにチョコレートの余韻。ひんやり濃厚で、これは友達にもすすめたい。", "S", "https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=1200&q=85"],
+];
+
 export async function ensureDatabase() {
   const { DB } = bindings();
   if (!DB) throw new Error("D1 binding DB is unavailable");
@@ -95,7 +119,7 @@ export async function ensureDatabase() {
     await DB.prepare(`ALTER TABLE reviews ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual'))`).run();
   }
   const ready = await DB.prepare(`SELECT value FROM app_meta WHERE key = 'seed_version'`).first().catch(() => null);
-  if (ready?.value === "3") return DB;
+  if (ready?.value === "4") return DB;
   await DB.batch(schemaStatements.map((sql) => DB.prepare(sql)));
   const now = Date.now();
   for (const [id, handle, displayName, bio, avatarColor, unofficial] of seedUsers) {
@@ -114,6 +138,15 @@ export async function ensureDatabase() {
     await DB.prepare(`INSERT OR IGNORE INTO tier_entries (user_id,place_id,tier,position,is_seed,updated_at) VALUES (?,?,?,?,1,?)`)
       .bind(...t, now).run();
   }
+  for (const brand of seedBrands) {
+    await DB.prepare(`INSERT OR IGNORE INTO brands (id,name,slug,accent_color,maps_query,is_seed,created_at) VALUES (?,?,?,?,?,1,?)`).bind(...brand, now).run();
+  }
+  for (const product of seedProducts) {
+    await DB.prepare(`INSERT OR IGNORE INTO products (id,brand_id,name,normalized_name,is_limited,release_date,official_url,image_url,created_by,is_seed,created_at) VALUES (?,?,?,?,?,?,?,?,?,1,?)`).bind(...product, now).run();
+  }
+  for (const review of seedProductReviews) {
+    await DB.prepare(`INSERT OR IGNORE INTO product_reviews (id,user_id,product_id,rating,body,tier,visibility,image_url,is_seed,created_at) VALUES (?,?,?,?,?,?,'public',?,1,?)`).bind(...review, now).run();
+  }
   await DB.batch([
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_mika','u_yui',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_mika','u_ren',?)`).bind(now),
@@ -121,7 +154,7 @@ export async function ensureDatabase() {
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_demo','u_yui',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_demo','u_ren',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_yui','u_demo',?)`).bind(now),
-    DB.prepare(`INSERT INTO app_meta (key,value) VALUES ('seed_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value`),
+    DB.prepare(`INSERT INTO app_meta (key,value) VALUES ('seed_version','4') ON CONFLICT(key) DO UPDATE SET value=excluded.value`),
   ]);
   return DB;
 }

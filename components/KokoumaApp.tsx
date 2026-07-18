@@ -11,7 +11,11 @@ type ReviewVisibility = "public" | "following" | "mutual";
 type Review = { id: string; userId: string; placeId: string; rating: number; body: string; imageKey?: string; displayName: string; handle: string; avatarColor: string; visibility: ReviewVisibility; isSeed: boolean; isFictionalDemo: boolean; isUnofficial: boolean };
 type TierEntry = { userId: string; placeId: string; tier: "S" | "A" | "B" | "C"; position: number; isSeed: boolean };
 type Follow = { followerId: string; followingId: string };
-type Bootstrap = { currentUser: User | null; users: User[]; places: Place[]; reviews: Review[]; tiers: TierEntry[]; follows: Follow[] };
+type Brand = { id: string; name: string; slug: string; accentColor: string; mapsQuery: string; isSeed: boolean };
+type Product = { id: string; brandId: string; brandName: string; name: string; normalizedName: string; isLimited: boolean; releaseDate?: string; officialUrl?: string; imageUrl?: string; imageKey?: string; createdBy: string; accentColor: string; mapsQuery: string; averageRating: number; reviewCount: number; wantCount: number; isSeed: boolean };
+type ProductReview = { id: string; userId: string; productId: string; rating: number; body: string; tier: "S"|"A"|"B"|"C"; visibility: ReviewVisibility; imageUrl?: string; imageKey?: string; storeName?: string; storeMapsUrl?: string; displayName: string; handle: string; avatarColor: string; isSeed: boolean; isUnofficial: boolean };
+type ProductWant = { userId: string; productId: string };
+type Bootstrap = { currentUser: User | null; users: User[]; places: Place[]; reviews: Review[]; tiers: TierEntry[]; follows: Follow[]; brands: Brand[]; products: Product[]; productReviews: ProductReview[]; productWants: ProductWant[] };
 type View = "discover" | "tier" | "people" | "profile";
 
 const ASAKUSA: [number, number] = [139.7947, 35.7122];
@@ -85,8 +89,9 @@ export function KokoumaApp() {
   const [followingOnly, setFollowingOnly] = useState(false);
   const [mobileMap, setMobileMap] = useState(false);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string>();
+  const [selectedProductId, setSelectedProductId] = useState<string>();
   const [profileId, setProfileId] = useState<string>();
-  const [modal, setModal] = useState<"auth" | "add" | "review" | "qr" | "scan" | null>(null);
+  const [modal, setModal] = useState<"auth" | "add" | "review" | "product-review" | "qr" | "scan" | null>(null);
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState<[number, number]>(ASAKUSA);
@@ -103,6 +108,7 @@ export function KokoumaApp() {
     return (!query || text.includes(query.toLowerCase())) && (area === "すべて" || place.area === area) && (!followingOnly || authors.some((id) => followed.has(id)));
   }), [data, query, area, followingOnly, followed]);
   const selectedPlace = data?.places.find((p) => p.id === selectedPlaceId);
+  const selectedProduct = data?.products.find((p) => p.id === selectedProductId);
   const selectedProfile = data?.users.find((u) => u.id === profileId || u.handle === profileId) ?? (view === "profile" ? current ?? undefined : undefined);
 
   const requireAuth = (next: typeof modal) => { if (!current) setModal("auth"); else setModal(next); };
@@ -127,6 +133,7 @@ export function KokoumaApp() {
         <div className="intro-block reveal-1"><div><span className="eyebrow"><Sparkles size={14} /> NEAR YOU, FROM YOUR PEOPLE</span><h1>星より、<br/><em>あの人</em>のひとこと。</h1></div><p>広告ではなく、知っている人の「また行きたい」だけを地図にしました。</p></div>
         <div className="search-zone reveal-2"><label className="search-box"><Search /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="店名・料理・街で探す" /></label><button className="locate-button" onClick={locate}><Crosshair />現在地</button></div>
         <div className="filters reveal-2">{areas.map((name) => <button key={name} className={area === name ? "active" : ""} onClick={() => { setArea(name); const place = data?.places.find((p) => p.area === name); if (place) setMapCenter([place.longitude, place.latitude]); }}>{name}</button>)}<button className={followingOnly ? "active friend-filter" : "friend-filter"} onClick={() => current ? setFollowingOnly(!followingOnly) : setModal("auth")}><Heart size={14} fill={followingOnly ? "currentColor" : "none"} />フォロー中</button></div>
+        <NewDropRail data={data!} followed={followed} onSelect={setSelectedProductId} onReview={() => requireAuth("product-review")} />
         <div className="result-heading"><p><b>{filteredPlaces.length}</b> SPOTS FOUND</p><span>{area === "すべて" ? "東京の友だちセレクト" : `${area}のおすすめ`}</span></div>
         <div className="place-grid">{filteredPlaces.map((place, index) => {
           const placeReviews = (data?.reviews ?? []).filter((r) => r.placeId === place.id);
@@ -143,7 +150,7 @@ export function KokoumaApp() {
       <div className="mobile-view-switch"><button className={!mobileMap ? "active" : ""} onClick={() => setMobileMap(false)}><List />リスト</button><button className={mobileMap ? "active" : ""} onClick={() => setMobileMap(true)}><MapIcon />地図</button></div>
     </main>}
 
-    {view === "tier" && <TierView data={data!} current={current} onAuth={() => setModal("auth")} onChanged={refresh} onSelectPlace={setSelectedPlaceId} toast={showToast} />}
+    {view === "tier" && <TierView data={data!} current={current} onAuth={() => setModal("auth")} onChanged={refresh} onSelectPlace={setSelectedPlaceId} onSelectProduct={setSelectedProductId} toast={showToast} />}
     {view === "people" && <PeopleView data={data!} current={current} followed={followed} selected={selectedProfile} onSelect={setProfileId} onFollow={async (id) => { if (!current) return setModal("auth"); try { await api("/api/follows", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({userId:id}) }); await refresh(); } catch(e) { showToast((e as Error).message); } }} onQr={() => requireAuth("qr")} onScan={() => setModal("scan")} />}
     {view === "profile" && current && <ProfileView user={current} data={data!} onQr={() => setModal("qr")} onLogout={async () => { await api("/api/auth/logout", { method:"POST" }); await refresh(); setView("discover"); }} onSelectPlace={setSelectedPlaceId} />}
     {view === "profile" && !current && <section className="auth-required"><UserRound /><h1>あなたの食の地図を作ろう。</h1><p>レビュー、Tier表、友だちのフォローはログインすると使えます。</p><button onClick={() => setModal("auth")}>ログイン / 新規登録</button></section>}
@@ -151,13 +158,63 @@ export function KokoumaApp() {
     <nav className="mobile-nav"><button className={view === "discover" ? "active" : ""} onClick={() => setView("discover")}><Compass /><span>見つける</span></button><button className={view === "tier" ? "active" : ""} onClick={() => setView("tier")}><Trophy /><span>Tier</span></button><button className="nav-add" onClick={() => requireAuth("add")}><Plus /></button><button className={view === "people" ? "active" : ""} onClick={() => setView("people")}><Users /><span>友だち</span></button><button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}><UserRound /><span>自分</span></button></nav>
 
     {selectedPlace && <PlaceDrawer place={selectedPlace} data={data!} current={current} onClose={() => setSelectedPlaceId(undefined)} onReview={() => requireAuth("review")} onProfile={(id) => { setProfileId(id); setView("people"); setSelectedPlaceId(undefined); }} />}
+    {selectedProduct && <ProductDrawer product={selectedProduct} data={data!} current={current} onClose={() => setSelectedProductId(undefined)} onReview={() => requireAuth("product-review")} onChanged={refresh} onAuth={() => setModal("auth")} />}
     {modal === "auth" && <AuthModal onClose={() => setModal(null)} onDone={async () => { setModal(null); await refresh(); showToast("KOKOUMAへようこそ！"); }} />}
     {modal === "add" && current && <AddPlaceModal onClose={() => setModal(null)} onDone={async (id) => { setModal(null); await refresh(); setSelectedPlaceId(id); showToast("地図に新しい一軒を追加しました"); }} />}
     {modal === "review" && selectedPlace && current && <ReviewModal place={selectedPlace} onClose={() => setModal(null)} onDone={async () => { setModal(null); await refresh(); showToast("レビューを記録しました"); }} />}
+    {modal === "product-review" && current && <ProductReviewModal data={data!} product={selectedProduct} onClose={() => setModal(null)} onDone={async (id) => { setModal(null); await refresh(); setSelectedProductId(id); showToast("新作レビューを公開しました"); }} />}
     {modal === "qr" && current && <QrModal user={current} onClose={() => setModal(null)} />}
     {modal === "scan" && <ScanModal onClose={() => setModal(null)} onScanned={(handle) => { setModal(null); setProfileId(handle); setView("people"); }} />}
     {toast && <div className="toast"><Sparkles />{toast}</div>}
   </div>;
+}
+
+function productImage(product: Product, reviews: ProductReview[]) {
+  if (product.imageKey) return `/api/media/${product.imageKey}`;
+  if (product.imageUrl) return product.imageUrl;
+  const review = reviews.find((item) => item.productId === product.id && (item.imageKey || item.imageUrl));
+  return review?.imageKey ? `/api/media/${review.imageKey}` : review?.imageUrl;
+}
+
+function openNearbyBrand(product: Product) {
+  const fallback = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(product.mapsQuery)}`;
+  const open = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
+  if (!navigator.geolocation) return open(fallback);
+  navigator.geolocation.getCurrentPosition(
+    ({ coords }) => open(`https://www.google.com/maps/search/${encodeURIComponent(product.mapsQuery)}/@${coords.latitude},${coords.longitude},14z`),
+    () => open(fallback),
+    { timeout: 5000 },
+  );
+}
+
+function NewDropRail({ data, followed, onSelect, onReview }: { data: Bootstrap; followed: Set<string>; onSelect: (id: string) => void; onReview: () => void }) {
+  return <section className="new-drop"><header><div><span><Sparkles /> NEW DROP</span><h2>友だちが食べた、チェーンの新作。</h2></div><button onClick={onReview}><Plus />新作をレビュー</button></header><div className="drop-rail">{data.products.map((product) => {
+    const reviews = data.productReviews.filter((review) => review.productId === product.id);
+    const review = reviews.find((item) => followed.has(item.userId)) ?? reviews[0];
+    const user = data.users.find((item) => item.id === review?.userId);
+    const image = productImage(product, reviews);
+    return <button className="drop-card" key={product.id} onClick={() => onSelect(product.id)} style={{ "--brand": product.accentColor } as React.CSSProperties}><span className="drop-photo" style={{ backgroundImage: image ? `url(${image})` : undefined }}><i>{product.isLimited ? "LIMITED" : "NEW"}</i><b>{review?.tier ?? "NEW"}<small>{review ? "TIER" : "DROP"}</small></b></span><span className="drop-copy"><small>{product.brandName} · {product.releaseDate?.replaceAll("-", ".") ?? "COMMUNITY DROP"}</small><strong>{product.name}</strong><em><Star fill="currentColor" />{Number(product.averageRating).toFixed(1)} <span>{product.reviewCount}人がレビュー</span></em>{review && user && <q><Avatar user={user} size={25}/>{review.body.length > 35 ? `${review.body.slice(0,35)}…` : review.body}</q>}</span></button>;
+  })}</div></section>;
+}
+
+function ProductDrawer({ product, data, current, onClose, onReview, onChanged, onAuth }: { product: Product; data: Bootstrap; current: User | null; onClose: () => void; onReview: () => void; onChanged: () => void; onAuth: () => void }) {
+  const reviews = data.productReviews.filter((review) => review.productId === product.id);
+  const image = productImage(product, reviews);
+  const wanted = Boolean(current && data.productWants.some((want) => want.userId === current.id && want.productId === product.id));
+  const toggleWant = async () => { if (!current) return onAuth(); await api("/api/products/want", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ productId:product.id }) }); await onChanged(); };
+  return <div className="drawer-backdrop" onMouseDown={(event) => event.currentTarget === event.target && onClose()}><aside className="place-drawer product-drawer"><button className="drawer-close" onClick={onClose} aria-label="閉じる"><X /></button><div className="drawer-hero">{image ? <img src={image} alt={product.name}/> : <div className="photo-fallback">NEW<br/>DROP</div>}<div className="drawer-gradient"/><span>{product.brandName} · {product.isLimited ? "期間限定" : "新商品"}</span></div><div className="drawer-content"><div className="place-title"><div><small>COMMUNITY PRODUCT</small><h2>{product.name}</h2><p><Sparkles />{product.releaseDate ? `${product.releaseDate.replaceAll("-",".")} RELEASE` : "友だちが見つけた新作"}</p></div><div className="big-score"><b>{Number(product.averageRating).toFixed(1)}</b><Stars value={Math.round(product.averageRating)}/><small>{product.reviewCount} reviews</small></div></div><div className="product-actions"><button onClick={() => openNearbyBrand(product)}><MapPin />近くの店舗を探す</button><button className={wanted ? "wanted" : ""} onClick={toggleWant}><Heart fill={wanted ? "currentColor" : "none"}/>{wanted ? "食べたい済み" : "食べたい"}</button><button onClick={onReview}><Star />レビューする</button></div>{product.officialUrl && <a className="official-link" href={product.officialUrl} target="_blank" rel="noreferrer"><Share2 />公式の商品情報（任意登録）</a>}<section className="review-section"><div className="section-label"><span>FRIENDS’ TASTES</span><b>{reviews.length}</b></div>{reviews.map((review) => { const user = data.users.find((item) => item.id === review.userId)!; const reviewImage = review.imageKey ? `/api/media/${review.imageKey}` : review.imageUrl; return <article className="product-review-card" key={review.id}>{reviewImage && <img src={reviewImage} alt=""/>}<div><button className="reviewer"><Avatar user={user} size={38}/><span><b>{user.displayName}</b><small>@{user.handle}</small></span><em className={`mini-tier tier-${review.tier}`}>{review.tier}</em></button><Stars value={review.rating}/><p>{review.body}</p>{review.storeName && <small><MapPin />{review.storeName}</small>}{review.visibility !== "public" && <span className={`audience-badge audience-${review.visibility}`}>{visibilityCopy[review.visibility].label}</span>}</div></article>; })}</section></div></aside></div>;
+}
+
+function ProductReviewModal({ data, product, onClose, onDone }: { data: Bootstrap; product?: Product; onClose: () => void; onDone: (id: string) => void }) {
+  const [brandId,setBrandId]=useState(product?.brandId ?? data.brands[0]?.id ?? "");
+  const [name,setName]=useState(product?.name ?? "");
+  const [photo,setPhoto]=useState<File>();
+  const [rating,setRating]=useState(5); const [body,setBody]=useState(""); const [tier,setTier]=useState<"S"|"A"|"B"|"C">("S"); const [visibility,setVisibility]=useState<ReviewVisibility>("public");
+  const [isLimited,setIsLimited]=useState(true); const [officialUrl,setOfficialUrl]=useState(""); const [storeName,setStoreName]=useState(""); const [storeMapsUrl,setStoreMapsUrl]=useState(""); const [busy,setBusy]=useState(false); const [error,setError]=useState("");
+  const candidates=data.products.filter((item)=>item.brandId===brandId);
+  const exact=candidates.find((item)=>item.name.normalize("NFKC").replace(/\s/g,"").toLowerCase()===name.normalize("NFKC").replace(/\s/g,"").toLowerCase());
+  const submit=async()=>{setBusy(true);setError("");try{let imageKey="";if(photo){const form=new FormData();form.append("file",photo);const uploaded=await api("/api/upload",{method:"POST",body:form});imageKey=uploaded.key;}const result=await api("/api/products/review",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({brandId,productId:product?.id??exact?.id,productName:name,rating,body,tier,visibility,imageKey,officialUrl,storeName,storeMapsUrl,isLimited})});onDone(result.productId);}catch(error){setError((error as Error).message);}finally{setBusy(false)}};
+  return <Modal title={product ? `${product.name}をレビュー` : "チェーンの新作をレビュー"} onClose={onClose}><div className="product-review-form"><div className="form-row"><label>ブランド<select value={brandId} onChange={(event)=>{setBrandId(event.target.value);setName("")}} disabled={Boolean(product)}>{data.brands.map((brand)=><option value={brand.id} key={brand.id}>{brand.name}</option>)}</select></label><label>商品名<input value={name} onChange={(event)=>setName(event.target.value)} list="product-candidates" maxLength={100} placeholder="商品名を入力" disabled={Boolean(product)}/><datalist id="product-candidates">{candidates.map((item)=><option key={item.id} value={item.name}/>)}</datalist></label></div><label className="product-photo-drop"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>setPhoto(event.target.files?.[0])}/>{photo?<img src={URL.createObjectURL(photo)} alt="投稿写真のプレビュー"/>:<><Camera/><span><b>食べた商品の写真</b><small>タップして追加 · 任意</small></span></>}</label><div className="rating-tier-row"><div><p>おすすめ度</p><Stars value={rating} interactive onChange={setRating}/></div><div><p>新作Tier</p><div className="compact-tier">{(["S","A","B","C"] as const).map((value)=><button key={value} className={tier===value?"active":""} style={{"--tier":tierColors[value]} as React.CSSProperties} onClick={()=>setTier(value)}>{value}</button>)}</div></div></div><label>ひとこと<textarea value={body} onChange={(event)=>setBody(event.target.value)} maxLength={600} placeholder="実際に食べて、友達にすすめたいと思った理由は？"/><small>{body.length}/600</small></label><fieldset className="audience-picker"><legend>公開範囲</legend>{(Object.keys(visibilityCopy) as ReviewVisibility[]).map((value)=><button type="button" key={value} className={visibility===value?"active":""} onClick={()=>setVisibility(value)}><span><b>{visibilityCopy[value].label}</b><small>{visibilityCopy[value].detail}</small></span></button>)}</fieldset><details className="optional-details"><summary><Plus />詳しい情報を追加（任意）</summary><div className="form-stack"><label className="check-line"><input type="checkbox" checked={isLimited} onChange={(event)=>setIsLimited(event.target.checked)}/>期間限定・数量限定の商品</label><label>食べた店舗<input value={storeName} onChange={(event)=>setStoreName(event.target.value)} placeholder="例：渋谷マークシティ店"/></label><label>店舗のGoogle Maps共有リンク<input value={storeMapsUrl} onChange={(event)=>setStoreMapsUrl(event.target.value)} placeholder="https://maps.app.goo.gl/…"/></label><label>公式商品ページ<input value={officialUrl} onChange={(event)=>setOfficialUrl(event.target.value)} placeholder="https://…"/></label></div></details>{error&&<p className="form-error">{error}</p>}<button className="primary-submit" onClick={submit} disabled={busy||name.trim().length<2||body.trim().length<2}>{busy?<LoaderCircle className="spin"/>:"この新作をレビュー"}</button></div></Modal>;
 }
 
 function PlaceDrawer({ place, data, current, onClose, onReview, onProfile }: { place: Place; data: Bootstrap; current: User | null; onClose: () => void; onReview: () => void; onProfile: (id: string) => void }) {
@@ -186,10 +243,11 @@ function ReviewModal({ place,onClose,onDone }: { place:Place;onClose:()=>void;on
   return <Modal title={`${place.name}の記録`} onClose={onClose}><div className="review-form"><p>あなたの星</p><Stars value={rating} interactive onChange={setRating}/><label>ひとこと<textarea value={body} onChange={(e)=>setBody(e.target.value)} maxLength={600} placeholder="誰と、どんな日に行きたい？ 味だけでなく、あなたの記憶を。"/><small>{body.length}/600</small></label><div><p>あなた的Tier</p><div className="tier-picker">{(["S","A","B","C"] as const).map((t)=><button key={t} className={tier===t?"active":""} style={{"--tier":tierColors[t]} as React.CSSProperties} onClick={()=>setTier(t)}>{t}<small>TIER</small></button>)}</div></div><fieldset className="audience-picker"><legend>この記録を見せる人</legend>{(Object.keys(visibilityCopy) as ReviewVisibility[]).map((value)=><button type="button" key={value} className={visibility===value?"active":""} onClick={()=>setVisibility(value)} aria-pressed={visibility===value}>{value === "public" ? <Share2 /> : value === "following" ? <Heart /> : <Users />}<span><b>{visibilityCopy[value].label}</b><small>{visibilityCopy[value].detail}</small></span></button>)}<p><Users />対象外の人には、レビュー本文・星・件数を表示しません。</p></fieldset>{error&&<p className="form-error">{error}</p>}<button className="primary-submit" disabled={busy||body.trim().length<2} onClick={submit}>{busy?<LoaderCircle className="spin"/>:"レビューを残す"}</button></div></Modal>;
 }
 
-function TierView({data,current,onAuth,onChanged,onSelectPlace,toast}:{data:Bootstrap;current:User|null;onAuth:()=>void;onChanged:()=>void;onSelectPlace:(id:string)=>void;toast:(s:string)=>void}){
+function TierView({data,current,onAuth,onChanged,onSelectPlace,onSelectProduct,toast}:{data:Bootstrap;current:User|null;onAuth:()=>void;onChanged:()=>void;onSelectPlace:(id:string)=>void;onSelectProduct:(id:string)=>void;toast:(s:string)=>void}){
   const [drag,setDrag]=useState<string>();
   const user=current??data.users.find((u)=>u.handle==="yui_cafe")!;
   const entries=data.tiers.filter((entry)=>entry.userId===user.id);
+  const productEntries=data.productReviews.filter((entry)=>entry.userId===user.id);
   const tierNames: TierEntry["tier"][]=["S","A","B","C"];
   const descriptions=["絶対行く","かなり好き","また行く","気分次第"];
   const move=async(placeId:string,tier:string)=>{
@@ -216,6 +274,7 @@ function TierView({data,current,onAuth,onChanged,onSelectPlace,toast}:{data:Boot
           {!rowEntries.length&&<div className="tier-empty">ここへお店をドロップ</div>}
         </div>
       </section>})}</div>
+    <section className="product-tier-zone"><header><span className="eyebrow"><Sparkles/> LIMITED PRODUCT RANKING</span><h2>新作・期間限定 Tier</h2><p>チェーンの商品は、お店とは別のTierで記録します。</p></header><div className="product-tier-board">{tierNames.map((tier,tierIndex)=><div className={`product-tier-row product-tier-${tier}`} key={tier}><b>{tier}<small>{descriptions[tierIndex]}</small></b><div>{productEntries.filter((entry)=>entry.tier===tier).map((entry)=>{const product=data.products.find((item)=>item.id===entry.productId)!;const image=productImage(product,data.productReviews);return <button key={product.id} onClick={()=>onSelectProduct(product.id)}><span style={{backgroundImage:image?`url(${image})`:undefined}}/><em>{product.brandName}</em><strong>{product.name}</strong></button>})}{!productEntries.some((entry)=>entry.tier===tier)&&<small>まだ新作がありません</small>}</div></div>)}</div></section>
     {!current&&<button className="floating-cta" onClick={onAuth}><Sparkles/>自分のTier表を作る</button>}
   </main>;
 }
