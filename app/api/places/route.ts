@@ -1,4 +1,4 @@
-import { assertSameOrigin, ensureDatabase, getCurrentUser, jsonError } from "../../../lib/server";
+import { assertSameOrigin, bindings, ensureDatabase, getCurrentUser, jsonError } from "../../../lib/server";
 import { isReviewVisibility } from "../../../lib/visibility";
 
 export async function POST(request: Request) {
@@ -47,4 +47,26 @@ export async function POST(request: Request) {
     if (String(error).includes("UNIQUE")) return jsonError("この店舗はすでに登録されています", 409);
     return jsonError("店舗を保存できませんでした", 500);
   }
+}
+
+export async function DELETE(request: Request) {
+  if (!assertSameOrigin(request)) return jsonError("不正なリクエストです", 403);
+  const user = await getCurrentUser(request);
+  if (!user) return jsonError("ログインしてください", 401);
+  const { id } = await request.json() as { id?: string };
+  if (!id) return jsonError("削除するお店が選択されていません");
+  const DB = await ensureDatabase();
+  const place = await DB.prepare(`SELECT created_by as createdBy,is_seed as isSeed,image_key as imageKey FROM places WHERE id=?`).bind(id).first<{ createdBy: string; isSeed: number; imageKey: string | null }>();
+  if (!place) return jsonError("お店が見つかりません", 404);
+  if (place.isSeed) return jsonError("初期データのお店は削除できません", 403);
+  if (place.createdBy !== user.id) return jsonError("自分が登録したお店だけ削除できます", 403);
+  const reviewImages = await DB.prepare(`SELECT image_key as imageKey FROM reviews WHERE place_id=? AND image_key IS NOT NULL`).bind(id).all<{ imageKey: string }>();
+  await DB.batch([
+    DB.prepare(`DELETE FROM tier_entries WHERE place_id=?`).bind(id),
+    DB.prepare(`DELETE FROM reviews WHERE place_id=?`).bind(id),
+    DB.prepare(`DELETE FROM places WHERE id=?`).bind(id),
+  ]);
+  const imageKeys = [place.imageKey, ...reviewImages.results.map((row) => row.imageKey)].filter((key): key is string => Boolean(key));
+  if (imageKeys.length) await bindings().MEDIA.delete(imageKeys).catch(() => undefined);
+  return Response.json({ ok: true });
 }

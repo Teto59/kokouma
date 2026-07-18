@@ -69,11 +69,12 @@ test("accepts only optional https product sources", () => {
 });
 
 test("ships production metadata and protected demo disclosure", async () => {
-  const [layout, server, component, placeRoute] = await Promise.all([
+  const [layout, server, component, placeRoute, reviewRoute] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/server.ts", import.meta.url), "utf8"),
     readFile(new URL("../components/KokoumaApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/places/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/reviews/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(layout, /KOKOUMA/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
@@ -92,9 +93,17 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.match(component, /お店とレビューを登録/);
   assert.match(component, /ピンから取得/);
   assert.match(component, /kokouma-area-suggestions/);
+  assert.match(component, /レビューを編集/);
+  assert.match(component, /写真を変更/);
+  assert.match(component, /お店を削除/);
   assert.doesNotMatch(component, /\["浅草","渋谷","新宿","二子玉川","神田","その他"\]/);
   assert.match(placeRoute, /住所未登録/);
   assert.match(placeRoute, /reviewCreated: hasReview/);
   assert.match(placeRoute, /await DB\.batch\(statements\)/);
+  assert.match(placeRoute, /export async function DELETE/);
+  assert.match(placeRoute, /自分が登録したお店だけ/);
+  assert.match(placeRoute, /MEDIA\.delete\(imageKeys\)/);
+  assert.match(reviewRoute, /existing\.imageKey !== imageKey/);
+  assert.match(reviewRoute, /startsWith\(`\$\{user\.id\}\//);
   assert.match(server, /PASSWORD_SALT_VERSION = "v2\$"/);
 });
