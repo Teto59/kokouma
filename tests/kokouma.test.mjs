@@ -96,6 +96,10 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.match(component, /レビューを編集/);
   assert.match(component, /写真を変更/);
   assert.match(component, /お店を削除/);
+  assert.match(component, /QR FRIEND PASS/);
+  assert.match(component, /profile-focus/);
+  assert.match(component, /openProfile\(handle\)/);
+  assert.match(component, /友だち一覧/);
   assert.doesNotMatch(component, /\["浅草","渋谷","新宿","二子玉川","神田","その他"\]/);
   assert.match(placeRoute, /住所未登録/);
   assert.match(placeRoute, /reviewCreated: hasReview/);
