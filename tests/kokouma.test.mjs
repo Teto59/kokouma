@@ -59,10 +59,11 @@ test("accepts only optional https product sources", () => {
 });
 
 test("ships production metadata and protected demo disclosure", async () => {
-  const [layout, server, component] = await Promise.all([
+  const [layout, server, component, placeRoute] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/server.ts", import.meta.url), "utf8"),
     readFile(new URL("../components/KokoumaApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/places/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(layout, /KOKOUMA/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
@@ -75,4 +76,8 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.match(component, /相互だけ/);
   assert.match(component, /NEW DROP/);
   assert.match(component, /近くの店舗を探す/);
+  assert.match(component, /住所.*optional-mark.*任意/);
+  assert.doesNotMatch(component, /disabled=\{!draft\.name\|\|!draft\.address\}/);
+  assert.match(placeRoute, /住所未登録/);
+  assert.match(server, /PASSWORD_SALT_VERSION = "v2\$"/);
 });

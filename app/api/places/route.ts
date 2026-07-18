@@ -6,13 +6,13 @@ export async function POST(request: Request) {
   if (!user) return jsonError("ログインしてください", 401);
   const data = await request.json() as Record<string, unknown>;
   const name = String(data.name ?? "").trim();
-  const address = String(data.address ?? "").trim();
+  const address = String(data.address ?? "").trim() || "住所未登録";
   const area = String(data.area ?? "").trim();
   const category = String(data.category ?? "").trim();
   const googleMapsUrl = String(data.googleMapsUrl ?? "").trim();
   const latitude = Number(data.latitude);
   const longitude = Number(data.longitude);
-  if (!name || !address || !area || !category || !googleMapsUrl || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return jsonError("店舗情報をすべて確認してください");
+  if (!name || !area || !category || !googleMapsUrl || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return jsonError("店舗情報をすべて確認してください");
   const host = new URL(googleMapsUrl).hostname;
   if (!["google.com", "www.google.com", "maps.google.com", "maps.app.goo.gl", "goo.gl"].includes(host)) return jsonError("Google Mapsの共有リンクが必要です");
   const DB = await ensureDatabase();

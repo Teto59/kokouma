@@ -173,14 +173,20 @@ export async function hashToken(value: string) {
   return toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 }
 
-export async function hashPassword(password: string, saltHex: string) {
+const PASSWORD_ITERATIONS_LEGACY = 120_000;
+const PASSWORD_ITERATIONS_EDGE = 20_000;
+const PASSWORD_SALT_VERSION = "v2$";
+
+export async function hashPassword(password: string, storedSalt: string) {
+  const isEdgeVersion = storedSalt.startsWith(PASSWORD_SALT_VERSION);
+  const saltHex = isEdgeVersion ? storedSalt.slice(PASSWORD_SALT_VERSION.length) : storedSalt;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const salt = new Uint8Array(saltHex.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? []);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 120_000 }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: isEdgeVersion ? PASSWORD_ITERATIONS_EDGE : PASSWORD_ITERATIONS_LEGACY }, key, 256);
   return toHex(bits);
 }
 
-export function newSalt() { return randomHex(16); }
+export function newSalt() { return PASSWORD_SALT_VERSION + randomHex(16); }
 
 export async function getCurrentUser(request: Request): Promise<AppUser | null> {
   const cookie = request.headers.get("cookie") ?? "";
