@@ -38,6 +38,7 @@ const seedUsers = [
   ["u_yui", "yui_cafe", "ユイ", "カフェの光、器、音までレビューします。", "#f4b8c4", 0],
   ["u_daichi", "daichi_eats", "ダイチ", "ラーメンとカツ丼。うまければ距離は関係ない。", "#5bb7d7", 0],
   ["u_jensen", "jensen_demo", "Jensen Huang", "NVIDIA CEOを題材にした非公式デモアカウントです。本人とは関係ありません。", "#76b900", 1],
+  ["u_kioxia_ota", "hiroo_ota_demo", "太田 裕雄", "キオクシア株式会社 代表取締役社長を題材にした非公式デモアカウントです。本人・同社とは関係ありません。", "#38bdf8", 1],
 ];
 
 const seedPlaces = [
@@ -74,6 +75,7 @@ const seedReviews = [
   ["r14", "u_jensen", "p_kanda_sankichi", 5, "炭火の前では、ロボティクスの話も串のようにテンポよく進む。価格性能まで圧倒的。※本人の発言ではなく、来店報道を題材にした架空のデモレビューです。", 1],
   ["r15", "u_mika", "p_asakusa_feb", 4, "朝いちばんの浅草で飲むカフェラテ。観光地の外側にある日常が好き。", 0],
   ["r16", "u_ren", "p_kanda_sankichi", 4, "串を何本頼んでも気取らない。神田で仲間と話す夜にちょうどいい。", 0],
+  ["r17", "u_kioxia_ota", "p_kanda_sankichi", 5, "煙の香りとタレの余韻は、不揮発性メモリのように長く残る。神田の夜を『記憶』に保存したくなる一軒。※本人の発言・来店事実ではなく、デモ用に作成した架空のレビューです。", 1],
 ];
 
 const seedTiers = [
@@ -82,6 +84,7 @@ const seedTiers = [
   ["u_daichi", "p_shibuya_zuicho", "S", 0], ["u_daichi", "p_shinjuku_fuunji", "S", 1], ["u_daichi", "p_shibuya_uobei", "B", 0],
   ["u_ren", "p_asakusa_sometaro", "S", 0], ["u_ren", "p_futako_oso", "A", 0], ["u_ren", "p_kanda_sankichi", "A", 1],
   ["u_jensen", "p_kanda_sankichi", "S", 0],
+  ["u_kioxia_ota", "p_kanda_sankichi", "S", 0],
 ];
 
 export async function ensureDatabase() {
@@ -92,7 +95,7 @@ export async function ensureDatabase() {
     await DB.prepare(`ALTER TABLE reviews ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual'))`).run();
   }
   const ready = await DB.prepare(`SELECT value FROM app_meta WHERE key = 'seed_version'`).first().catch(() => null);
-  if (ready?.value === "2") return DB;
+  if (ready?.value === "3") return DB;
   await DB.batch(schemaStatements.map((sql) => DB.prepare(sql)));
   const now = Date.now();
   for (const [id, handle, displayName, bio, avatarColor, unofficial] of seedUsers) {
@@ -118,7 +121,7 @@ export async function ensureDatabase() {
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_demo','u_yui',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_demo','u_ren',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_yui','u_demo',?)`).bind(now),
-    DB.prepare(`INSERT INTO app_meta (key,value) VALUES ('seed_version','2') ON CONFLICT(key) DO UPDATE SET value=excluded.value`),
+    DB.prepare(`INSERT INTO app_meta (key,value) VALUES ('seed_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value`),
   ]);
   return DB;
 }

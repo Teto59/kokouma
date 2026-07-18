@@ -50,6 +50,8 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   assert.match(server, /Jensen Huang/);
   assert.match(server, /架空のデモレビュー/);
+  assert.match(server, /太田 裕雄/);
+  assert.match(server, /本人の発言・来店事実ではなく/);
   assert.match(component, /OpenStreetMap contributors/);
   assert.match(component, /QRコード/);
   assert.match(component, /相互だけ/);
