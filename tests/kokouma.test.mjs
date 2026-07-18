@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { parseGoogleMapsUrl } from "../lib/maps.ts";
 import { canViewReview, isReviewVisibility } from "../lib/visibility.ts";
-import { normalizeProductName, optionalHttpsUrl } from "../lib/products.ts";
+import { brandAccent, normalizeBrandName, normalizeProductName, optionalHttpsUrl } from "../lib/products.ts";
 
 test("parses coordinates from a normal Google Maps URL", () => {
   const result = parseGoogleMapsUrl("https://www.google.com/maps/place/FEBRUARY+CAFE/@35.70862,139.79582,17z");
@@ -44,6 +44,12 @@ test("rejects unknown audience values", () => {
 test("normalizes community product names for deduplication", () => {
   assert.equal(normalizeProductName(" ハニー　バナナ フラペチーノ® "), "ハニーバナナフラペチーノ");
   assert.equal(normalizeProductName("メロン・ショコリキサー"), "メロンショコリキサー");
+});
+
+test("normalizes community brand names and gives them a stable accent", () => {
+  assert.equal(normalizeBrandName(" Starbucks® "), normalizeBrandName("ＳＴＡＲＢＵＣＫＳ"));
+  assert.equal(normalizeBrandName("ゴディバ・ジャパン"), normalizeBrandName("ゴディバ ジャパン"));
+  assert.equal(brandAccent("成城石井"), brandAccent(" 成城石井 "));
 });
 
 test("accepts only optional https product sources", () => {
