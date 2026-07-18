@@ -1,9 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/kaisei-decol/700.css";
-import "@fontsource/m-plus-rounded-1c/400.css";
-import "@fontsource/m-plus-rounded-1c/500.css";
-import "@fontsource/m-plus-rounded-1c/700.css";
-import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,5 +18,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#17130f" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ja"><body>{children}</body></html>;
+  return <html lang="ja"><head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link href="https://unpkg.com/maplibre-gl@5.20.2/dist/maplibre-gl.css" rel="stylesheet" />
+  </head><body>{children}</body></html>;
 }
