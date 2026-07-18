@@ -53,6 +53,7 @@ export const reviews = sqliteTable("reviews", {
   rating: integer("rating").notNull(),
   body: text("body").notNull(),
   imageKey: text("image_key"),
+  visibility: text("visibility", { enum: ["public", "following", "mutual"] }).notNull().default("public"),
   isSeed: integer("is_seed", { mode: "boolean" }).notNull().default(false),
   isFictionalDemo: integer("is_fictional_demo", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at").notNull(),

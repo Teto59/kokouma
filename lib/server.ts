@@ -23,7 +23,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS follows (follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at INTEGER NOT NULL, PRIMARY KEY(follower_id, following_id))`,
   `CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL, area TEXT NOT NULL, category TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL, google_maps_url TEXT NOT NULL UNIQUE, image_url TEXT, image_key TEXT, created_by TEXT NOT NULL REFERENCES users(id), is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, image_key TEXT, is_seed INTEGER NOT NULL DEFAULT 0, is_fictional_demo INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, place_id))`,
+  `CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, image_key TEXT, visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual')), is_seed INTEGER NOT NULL DEFAULT 0, is_fictional_demo INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, place_id))`,
   `CREATE TABLE IF NOT EXISTS tier_entries (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE, tier TEXT NOT NULL CHECK(tier IN ('S','A','B','C')), position INTEGER NOT NULL DEFAULT 0, is_seed INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY(user_id, place_id))`,
   `CREATE TABLE IF NOT EXISTS geocode_cache (query TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_reviews_place ON reviews(place_id, created_at DESC)`,
@@ -87,8 +87,12 @@ const seedTiers = [
 export async function ensureDatabase() {
   const { DB } = bindings();
   if (!DB) throw new Error("D1 binding DB is unavailable");
+  const reviewColumns = await DB.prepare(`PRAGMA table_info(reviews)`).all<{ name: string }>().catch(() => ({ results: [] }));
+  if (reviewColumns.results.length && !reviewColumns.results.some((column) => column.name === "visibility")) {
+    await DB.prepare(`ALTER TABLE reviews ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual'))`).run();
+  }
   const ready = await DB.prepare(`SELECT value FROM app_meta WHERE key = 'seed_version'`).first().catch(() => null);
-  if (ready?.value === "1") return DB;
+  if (ready?.value === "2") return DB;
   await DB.batch(schemaStatements.map((sql) => DB.prepare(sql)));
   const now = Date.now();
   for (const [id, handle, displayName, bio, avatarColor, unofficial] of seedUsers) {
@@ -111,7 +115,10 @@ export async function ensureDatabase() {
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_mika','u_yui',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_mika','u_ren',?)`).bind(now),
     DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_mika','u_daichi',?)`).bind(now),
-    DB.prepare(`INSERT OR IGNORE INTO app_meta (key,value) VALUES ('seed_version','1')`),
+    DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_demo','u_yui',?)`).bind(now),
+    DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_demo','u_ren',?)`).bind(now),
+    DB.prepare(`INSERT OR IGNORE INTO follows (follower_id,following_id,created_at) VALUES ('u_yui','u_demo',?)`).bind(now),
+    DB.prepare(`INSERT INTO app_meta (key,value) VALUES ('seed_version','2') ON CONFLICT(key) DO UPDATE SET value=excluded.value`),
   ]);
   return DB;
 }

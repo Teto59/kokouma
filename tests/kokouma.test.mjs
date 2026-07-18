@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { parseGoogleMapsUrl } from "../lib/maps.ts";
+import { canViewReview, isReviewVisibility } from "../lib/visibility.ts";
 
 test("parses coordinates from a normal Google Maps URL", () => {
   const result = parseGoogleMapsUrl("https://www.google.com/maps/place/FEBRUARY+CAFE/@35.70862,139.79582,17z");
@@ -20,6 +21,25 @@ test("rejects non-Google hosts", () => {
   assert.throws(() => parseGoogleMapsUrl("https://example.com/maps/place/foo"), /Google Maps/);
 });
 
+test("enforces following and mutual review audiences", () => {
+  const follows = [
+    { followerId: "author", followingId: "friend" },
+    { followerId: "friend", followingId: "author" },
+    { followerId: "author", followingId: "one-way" },
+  ];
+  assert.equal(canViewReview("public", "author", null, follows), true);
+  assert.equal(canViewReview("following", "author", "one-way", follows), true);
+  assert.equal(canViewReview("following", "author", "stranger", follows), false);
+  assert.equal(canViewReview("mutual", "author", "friend", follows), true);
+  assert.equal(canViewReview("mutual", "author", "one-way", follows), false);
+  assert.equal(canViewReview("mutual", "author", "author", follows), true);
+});
+
+test("rejects unknown audience values", () => {
+  assert.equal(isReviewVisibility("mutual"), true);
+  assert.equal(isReviewVisibility("close-friends"), false);
+});
+
 test("ships production metadata and protected demo disclosure", async () => {
   const [layout, server, component] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
@@ -32,4 +52,5 @@ test("ships production metadata and protected demo disclosure", async () => {
   assert.match(server, /架空のデモレビュー/);
   assert.match(component, /OpenStreetMap contributors/);
   assert.match(component, /QRコード/);
+  assert.match(component, /相互だけ/);
 });

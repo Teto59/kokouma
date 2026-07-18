@@ -1,0 +1,1 @@
+ALTER TABLE `reviews` ADD `visibility` text DEFAULT 'public' NOT NULL;
