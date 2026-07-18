@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://kokouma.jp"),
+  metadataBase: new URL("https://kokouma.teto66.chatgpt.site"),
   title: "KOKOUMA — 友だちの『ここ、うまい』を地図に。",
   description: "信頼できる友だちのおすすめだけで、次の一軒に出会うソーシャルグルメマップ。",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
