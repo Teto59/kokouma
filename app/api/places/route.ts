@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const hasReview = reviewBody.length > 0;
   const reviewRating = Number(review?.rating);
   const reviewTier = String(review?.tier ?? "S");
-  const reviewVisibility = String(review?.visibility ?? "public");
+  const reviewVisibility = String(review?.visibility ?? "following");
   if (!name || !area || !category || !googleMapsUrl || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return jsonError("店舗情報をすべて確認してください");
   if (hasReview && (reviewBody.length < 2 || reviewBody.length > 600 || !Number.isInteger(reviewRating) || reviewRating < 1 || reviewRating > 5)) return jsonError("レビューは星と2〜600文字の感想を入力してください");
   if (hasReview && !["S", "A", "B", "C"].includes(reviewTier)) return jsonError("Tierが正しくありません");

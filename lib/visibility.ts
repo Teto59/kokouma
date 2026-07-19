@@ -2,8 +2,12 @@ export const reviewVisibilities = ["public", "following", "mutual"] as const;
 
 export type ReviewVisibility = (typeof reviewVisibilities)[number];
 
-export function isReviewVisibility(value: unknown): value is ReviewVisibility {
-  return typeof value === "string" && reviewVisibilities.includes(value as ReviewVisibility);
+export const selectableVisibilities = ["following", "mutual"] as const;
+
+export type SelectableVisibility = (typeof selectableVisibilities)[number];
+
+export function isReviewVisibility(value: unknown): value is SelectableVisibility {
+  return typeof value === "string" && selectableVisibilities.includes(value as SelectableVisibility);
 }
 
 export function canViewReview(

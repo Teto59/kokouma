@@ -1,6 +1,6 @@
 import { GOOGLE_MAPS_HOSTS } from "../../../../lib/maps";
 import { normalizeProductName, optionalHttpsUrl } from "../../../../lib/products";
-import { assertSameOrigin, ensureDatabase, getCurrentUser, jsonError } from "../../../../lib/server";
+import { assertSameOrigin, bindings, ensureDatabase, getCurrentUser, jsonError } from "../../../../lib/server";
 import { isReviewVisibility } from "../../../../lib/visibility";
 
 type Payload = {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const body = data.body?.trim() ?? "";
   const rating = Number(data.rating);
   const tier = data.tier ?? "A";
-  const visibility = data.visibility ?? "public";
+  const visibility = data.visibility ?? "following";
   if (!data.brandId || name.length < 2 || name.length > 100) return jsonError("ブランドと商品名を入力してください");
   if (!Number.isInteger(rating) || rating < 1 || rating > 5 || body.length < 2 || body.length > 600) return jsonError("星と2〜600文字のレビューを入力してください");
   if (!["S", "A", "B", "C"].includes(tier)) return jsonError("Tierが正しくありません");
@@ -68,4 +68,22 @@ export async function POST(request: Request) {
       .bind(crypto.randomUUID(), user.id, productId, rating, body, tier, visibility, data.imageKey || null, data.storeName?.trim() || null, storeMapsUrl, Date.now()).run();
   }
   return Response.json({ ok: true, productId });
+}
+
+export async function DELETE(request: Request) {
+  if (!assertSameOrigin(request)) return jsonError("不正なリクエストです", 403);
+  const user = await getCurrentUser(request);
+  if (!user) return jsonError("ログインしてください", 401);
+  const { productId } = await request.json() as { productId?: string };
+  if (!productId) return jsonError("商品が指定されていません");
+  const DB = await ensureDatabase();
+  const review = await DB.prepare(`SELECT id, is_seed as isSeed, image_key as imageKey FROM product_reviews WHERE user_id=? AND product_id=?`).bind(user.id, productId).first<{ id: string; isSeed: number; imageKey: string | null }>();
+  if (!review) return jsonError("レビューが見つかりません", 404);
+  if (review.isSeed) return jsonError("初期レビューは保護されています", 403);
+  await DB.prepare(`DELETE FROM product_reviews WHERE id=?`).bind(review.id).run();
+  if (review.imageKey) {
+    const product = await DB.prepare(`SELECT image_key as imageKey FROM products WHERE id=?`).bind(productId).first<{ imageKey: string | null }>();
+    if (product?.imageKey !== review.imageKey) await bindings().MEDIA.delete(review.imageKey).catch(() => undefined);
+  }
+  return Response.json({ ok: true });
 }
