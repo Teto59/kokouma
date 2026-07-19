@@ -23,7 +23,7 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS follows (follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at INTEGER NOT NULL, PRIMARY KEY(follower_id, following_id))`,
   `CREATE TABLE IF NOT EXISTS places (id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL, area TEXT NOT NULL, category TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL, google_maps_url TEXT NOT NULL UNIQUE, image_url TEXT, image_key TEXT, created_by TEXT NOT NULL REFERENCES users(id), is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`,
-  `CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, image_key TEXT, visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual')), is_seed INTEGER NOT NULL DEFAULT 0, is_fictional_demo INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, place_id))`,
+  `CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, image_key TEXT, visibility TEXT NOT NULL DEFAULT 'following' CHECK(visibility IN ('public','following','mutual')), is_seed INTEGER NOT NULL DEFAULT 0, is_fictional_demo INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, place_id))`,
   `CREATE TABLE IF NOT EXISTS tier_entries (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE, tier TEXT NOT NULL CHECK(tier IN ('S','A','B','C')), position INTEGER NOT NULL DEFAULT 0, is_seed INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY(user_id, place_id))`,
   `CREATE TABLE IF NOT EXISTS geocode_cache (query TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_reviews_place ON reviews(place_id, created_at DESC)`,
@@ -31,7 +31,7 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS idx_tiers_user ON tier_entries(user_id, tier, position)`,
   `CREATE TABLE IF NOT EXISTS brands (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, slug TEXT NOT NULL UNIQUE, accent_color TEXT NOT NULL DEFAULT '#ff5a36', maps_query TEXT NOT NULL, is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, brand_id TEXT NOT NULL REFERENCES brands(id) ON DELETE CASCADE, name TEXT NOT NULL, normalized_name TEXT NOT NULL, is_limited INTEGER NOT NULL DEFAULT 1, release_date TEXT, official_url TEXT, image_url TEXT, image_key TEXT, created_by TEXT NOT NULL REFERENCES users(id), is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(brand_id, normalized_name))`,
-  `CREATE TABLE IF NOT EXISTS product_reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, tier TEXT NOT NULL CHECK(tier IN ('S','A','B','C')), visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual')), image_url TEXT, image_key TEXT, store_name TEXT, store_maps_url TEXT, is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, product_id))`,
+  `CREATE TABLE IF NOT EXISTS product_reviews (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), body TEXT NOT NULL, tier TEXT NOT NULL CHECK(tier IN ('S','A','B','C')), visibility TEXT NOT NULL DEFAULT 'following' CHECK(visibility IN ('public','following','mutual')), image_url TEXT, image_key TEXT, store_name TEXT, store_maps_url TEXT, is_seed INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, UNIQUE(user_id, product_id))`,
   `CREATE TABLE IF NOT EXISTS product_wants (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE, created_at INTEGER NOT NULL, PRIMARY KEY(user_id, product_id))`,
   `CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_product_reviews_product ON product_reviews(product_id, created_at DESC)`,
@@ -118,6 +118,16 @@ export async function ensureDatabase() {
   if (reviewColumns.results.length && !reviewColumns.results.some((column) => column.name === "visibility")) {
     await DB.prepare(`ALTER TABLE reviews ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','following','mutual'))`).run();
   }
+  if (reviewColumns.results.length) {
+    const visibilityMigrated = await DB.prepare(`SELECT value FROM app_meta WHERE key='visibility_v2'`).first().catch(() => null);
+    if (!visibilityMigrated) {
+      await DB.batch([
+        DB.prepare(`UPDATE reviews SET visibility='following' WHERE visibility='public' AND is_seed=0`),
+        DB.prepare(`UPDATE product_reviews SET visibility='following' WHERE visibility='public' AND is_seed=0`),
+        DB.prepare(`INSERT INTO app_meta (key,value) VALUES ('visibility_v2','1') ON CONFLICT(key) DO UPDATE SET value=excluded.value`),
+      ]).catch(() => undefined);
+    }
+  }
   const ready = await DB.prepare(`SELECT value FROM app_meta WHERE key = 'seed_version'`).first().catch(() => null);
   if (ready?.value === "4") return DB;
   await DB.batch(schemaStatements.map((sql) => DB.prepare(sql)));
@@ -131,7 +141,7 @@ export async function ensureDatabase() {
       .bind(...p, now).run();
   }
   for (const r of seedReviews) {
-    await DB.prepare(`INSERT OR IGNORE INTO reviews (id,user_id,place_id,rating,body,is_seed,is_fictional_demo,created_at) VALUES (?,?,?,?,?,1,?,?)`)
+    await DB.prepare(`INSERT OR IGNORE INTO reviews (id,user_id,place_id,rating,body,is_seed,is_fictional_demo,visibility,created_at) VALUES (?,?,?,?,?,1,?,'public',?)`)
       .bind(...r, now).run();
   }
   for (const t of seedTiers) {
